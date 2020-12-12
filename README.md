@@ -7,5 +7,4 @@
  String and integer variables
  Array
  Local variables
- 
 ```
