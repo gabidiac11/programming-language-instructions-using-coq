@@ -11,7 +11,7 @@ Require Coq.Init.Nat.
 Inductive ErrorNat :=
   | error_nat : ErrorNat
   | num : nat -> ErrorNat
-  | empty_arr: ErrorNat
+  | empty_arr
   | array_num : ErrorNat -> ErrorNat -> ErrorNat.
 
 Coercion num: nat >-> ErrorNat.
@@ -39,8 +39,7 @@ Inductive AExp :=
 | amul: AExp -> AExp -> AExp
 | adiv: AExp -> AExp -> AExp
 | amod: AExp -> AExp -> AExp
-| aaray_nth: AExp -> AExp -> AExp
-| aaray_rm: AExp -> AExp -> AExp.
+| array_index: string -> AExp -> AExp.
 Coercion anum: ErrorNat >-> AExp.
 Coercion avar: string >-> AExp.
 
@@ -49,8 +48,6 @@ Notation "A -' B" := (asub A B)(at level 50, left associativity).
 Notation "A *' B" := (amul A B)(at level 48, left associativity).
 Notation "A /' B" := (adiv A B)(at level 48, left associativity).
 Notation "A %' B" := (amod A B)(at level 45, left associativity).
-Notation "A ^' B " := (aaray_nth A B)(at level 45, left associativity).
-Notation "'removeVal(' A  B ')'" := (aaray_rm A B)(at level 45, left associativity).
 
 Inductive BExp :=
 | berror
@@ -73,37 +70,36 @@ Inductive FunctionParam :=
 Inductive Function :=
 | func: string -> FunctionParam -> Function.
 
-Inductive Return :=
-| retrun: AExp -> Return.
-
 Inductive Stmt :=
-  | nat_decl: string -> AExp -> Stmt (* Declaration Stmt for variables of type nat *)
-  | bool_decl: string -> BExp -> Stmt (* Declaration Stmt for variables of type bool *)
-  | array_decl: string -> AExp -> Stmt (* Declaration Stmt for variables of type bool *)
-  | nat_assign : string -> AExp -> Stmt (* Assignment Stmt for variables of type nat *)
-  | bool_assign : string -> BExp -> Stmt (* Assignment Stmt for variables of type nat *)
-  | array_assign: string -> AExp -> Stmt (* Declaration Stmt for variables of type bool *)
+  | nat_decl: string -> AExp -> Stmt 
+  | bool_decl: string -> BExp -> Stmt 
+  | nat_assign : string -> AExp -> Stmt 
+  | bool_assign : string -> BExp -> Stmt 
   | sequence : Stmt -> Stmt -> Stmt
   | while : BExp -> Stmt -> Stmt
   | ifthenelse : BExp -> Stmt -> Stmt -> Stmt
   | ifthen : BExp -> Stmt -> Stmt
+  (* switch *)
   | empty_case
   | case_val: AExp -> Stmt -> Stmt
   | case: Stmt -> Stmt -> Stmt (* value then statement else next *)
   | switch : AExp -> Stmt -> Stmt
+  (*function *)
   | end_func
   | func_declare: Function -> Stmt -> Stmt
-  | func_call: string -> FunctionParam -> Stmt -> Stmt.
+  | func_call: string -> FunctionParam -> Stmt -> Stmt
+  (* array *)
+  | array_decl: string -> ErrorNat -> Stmt 
+  | array_assign: string -> ErrorNat -> Stmt
+  | array_update: string -> AExp -> AExp-> Stmt
+.
 
 Notation "X :n= A" := (nat_assign X A)(at level 90).
 Notation "X :b= A" := (bool_assign X A)(at level 90).
 Notation "'iNat' X ::= A" := (nat_decl X A)(at level 90).
 Notation "'iBool' X ::= A" := (bool_decl X A)(at level 90).
-Notation "'iArray' X ::= A" := (array_assign X A)(at level 90).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "'fors' ( A ~ B ~ C ) { S }" := (A ;; while B ( S ;; C )) (at level 97).
-Notation "'iFunc' A  ::= { B ~ S }" := (func_declare A B S)(at level 93).
-Notation "'call' A ~ B " := (func_call A B)(at level 93).
 
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
 
@@ -161,16 +157,6 @@ Definition check_eq_over_types (t1 : Result) (t2 : Result) : bool :=
                      | res_nat error_nat => true
                      | _ => false
                      end
-  | res_nat (array_num n m) => match t2 with 
-                     | res_nat empty_arr => true
-                     | res_nat (array_num n' m') => true
-                     | _ => false
-                     end
-  | res_nat empty_arr => match t2 with 
-                     | res_nat empty_arr => true
-                     | res_nat (array_num n m) => true
-                     | _ => false
-                     end
   | res_bool (boolean n) => match t2 with 
                      | res_bool (boolean n') => true
                      | _ => false
@@ -181,6 +167,16 @@ Definition check_eq_over_types (t1 : Result) (t2 : Result) : bool :=
                      end
   | code p1 c1 => match t2 with 
                      | code p2 c2 => true
+                     | _ => false
+                     end
+  | res_nat (array_num n m) => match t2 with 
+                     | res_nat empty_arr => true
+                     | res_nat (array_num n' m') => true
+                     | _ => false
+                     end
+  | res_nat empty_arr => match t2 with 
+                     | res_nat empty_arr => true
+                     | res_nat (array_num n m) => true
                      | _ => false
                      end
   end.  
@@ -327,7 +323,7 @@ Definition eq_ErrorBool (n1 n2 : ErrorNat) : ErrorBool :=
     end.
 
 
-Fixpoint array_ErrorRemove_val (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
+(* Fixpoint array_ErrorRemove_val (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
     match a1, a2 with
       | error_nat, _ => error_nat
       | _, error_nat => error_nat
@@ -341,9 +337,9 @@ Fixpoint array_ErrorRemove_val (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
                                          | _ => array_num val (array_ErrorRemove_val a1 next)
                                          end
       |_, _ => error_nat
-    end.
+    end. *)
 
-Fixpoint array_ErrorLookAt (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
+(* Fixpoint array_ErrorLookAt (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
     match a1, a2 with
       | error_nat, _ => error_nat
       | _, error_nat => error_nat
@@ -354,8 +350,15 @@ Fixpoint array_ErrorLookAt (a1:ErrorNat) (a2: ErrorNat) : ErrorNat :=
                 | _, _ => error_nat
       end
       |_, _ => error_nat
-    end.
+    end. *)
 
+Fixpoint indexOfArray (arrayValue: ErrorNat) (n: nat) : ErrorNat :=
+match n, arrayValue with
+  | _, empty_arr => error_nat
+  | O, array_num value next => value
+  | S m, array_num value next => indexOfArray next m
+  |_, _ => error_nat
+end.
 
 (* AExp FUNCTIONS ---------------------------------------------------------------------- ###eval*)
 Fixpoint aeval_fun (a : AExp) (envStack : EnvStack) : ErrorNat :=
@@ -374,8 +377,21 @@ Fixpoint aeval_fun (a : AExp) (envStack : EnvStack) : ErrorNat :=
   | asub a1 a2 => (sub_ErrorNat (aeval_fun a1 envStack) (aeval_fun a2 envStack))
   | adiv a1 a2 => (div_ErrorNat  (aeval_fun a1 envStack) (aeval_fun a2 envStack ))
   | amod a1 a2 => (mod_ErrorNat (aeval_fun a1 envStack) (aeval_fun a2 envStack ))
-  | aaray_nth a1 a2 => (array_ErrorLookAt (aeval_fun a1 envStack) (aeval_fun a2 envStack)) 
-  | aaray_rm a1 a2 => (plus_ErrorNat (aeval_fun a1 envStack) (aeval_fun a2 envStack))
+  | array_index arrayName index =>  match ((topEnv envStack) arrayName) with
+                                                        | res_nat arrayValue =>  match index with
+                                                                                | num n => indexOfArray arrayValue n
+                                                                                | _ => error_nat
+                                                                                end
+                                                         (*get the value from global scope (the first env in the stack) if is not found in current env*)
+                                                        | _ => match ((globalEnv envStack) arrayName) with
+                                                                                 | res_nat arrayValue => match index with
+                                                                                                          | num n => indexOfArray arrayValue n
+                                                                                                          | _ => error_nat
+                                                                                                          end
+                                                                                 | _ => error_nat
+                                                                                 end
+                                                       
+                                  end 
   end.
 
 (* BExp FUNCTIONS ---------------------------------------------------------------------- ###eval*)
@@ -514,6 +530,21 @@ match n with
                 end
  end.
 
+Fixpoint updateArrayAt2 (arr : ErrorNat) (index: nat) ( newValue : ErrorNat)  : ErrorNat := 
+match index, arr with
+ | O, array_num value next => array_num newValue next
+ | S m, array_num value next => array_num value (updateArrayAt2 next m newValue)
+ |  _ , empty_array => empty_arr 
+end.
+
+Fixpoint updateArrayAt (arr2 : Result) (index: ErrorNat) ( newValue : ErrorNat)  : ErrorNat := 
+match index with
+| num n => match arr2 with
+                | res_nat arr => updateArrayAt2 arr n newValue
+                | _ => empty_arr
+              end
+| _ => empty_arr
+end.
 (* Compute (topEnv 1 envStack5) "x" . *)
 
 Fixpoint eval_fun2 (s : Stmt) (envStack : EnvStack) (gas: nat) : EnvStack := 
@@ -522,21 +553,21 @@ Fixpoint eval_fun2 (s : Stmt) (envStack : EnvStack) (gas: nat) : EnvStack :=
     | S gas' => match s with
                 | sequence S1 S2 => eval_fun2 S2 (eval_fun2 S1 envStack gas') gas'
                 | nat_decl a aexp => updateEnvStack envStack (update (update (topEnv envStack) a default) a (res_nat (aeval_fun aexp envStack)))
-                | array_decl a aexp =>  updateEnvStack envStack ( update (update (topEnv envStack) a default) a (res_nat (aeval_fun aexp envStack)) )
+                
                 | bool_decl b bexp => updateEnvStack envStack (update (update (topEnv envStack) b default) b (res_bool (beval_fun bexp envStack)))
-                (*check the global scope*)
+                
                 | nat_assign a aexp => match ((topEnv envStack) a) with
                                                 | res_nat n => updateEnvStack envStack ( update (topEnv envStack) a (res_nat (aeval_fun aexp envStack)) )
-                                                | default => updateEnvStack envStack ( update (topEnv envStack) a (res_nat (aeval_fun aexp envStack)) )                                                 
+                                                | default => updateEnvStack envStack ( update (topEnv envStack) a (res_nat (aeval_fun aexp envStack)) )          
+                                               (*update the global scope if it's nothing on the local level*)                                     
                                                 | _ => updateEnvStackAtIndex envStack (update (globalEnv envStack) a (res_nat (aeval_fun aexp envStack))) ((stackLength envStack 0) -1)
                                                 end
                 | bool_assign b bexp => match ((topEnv envStack) b) with
                                                 | res_nat n => updateEnvStack envStack ( update (topEnv envStack) b (res_bool (beval_fun bexp envStack)) )
                                                 | default => updateEnvStack envStack ( update (topEnv envStack) b (res_bool (beval_fun bexp envStack)) )                                              
+                                                (*update the global scope if it's nothing on the local level*) 
                                                 | _ => updateEnvStackAtIndex envStack ( update (globalEnv envStack) b (res_bool (beval_fun bexp envStack)) ) ((stackLength envStack 0) -1)
                                                 end
-                | array_assign a aexp =>  updateEnvStack envStack ( update (topEnv envStack) a (res_nat (aeval_fun aexp envStack)) )
-
                 | ifthen cond s' => 
                     match (beval_fun cond envStack) with
                     | error_bool => envStack
@@ -561,6 +592,7 @@ Fixpoint eval_fun2 (s : Stmt) (envStack : EnvStack) (gas: nat) : EnvStack :=
                                      | false => envStack
                                      end
                         end
+              (* SWITCH STMS ----------------------------------------*)
                | switch e cases =>  match (switch_match e cases envStack) with
                                           | empty_case => envStack
                                           | _ => eval_fun2 (switch_match e cases envStack) envStack gas' 
@@ -568,6 +600,7 @@ Fixpoint eval_fun2 (s : Stmt) (envStack : EnvStack) (gas: nat) : EnvStack :=
                 | empty_case => envStack
                 | case_val axpr s1 => envStack
                 | case s1 s2 =>  envStack
+                (* FUNCTION STMS ----------------------------------------*)
                 (* check if params is a list of string *)
                 | func_declare myFunction S1 => match myFunction with
                                                                 | func name params => updateEnvStack envStack (update ( (* update the env ${function name} - code sequence ${params}-${actual-function-statements} *)
@@ -585,7 +618,34 @@ Fixpoint eval_fun2 (s : Stmt) (envStack : EnvStack) (gas: nat) : EnvStack :=
                                                                                 end
                                         |  _ => envStack
                                       end
-               | end_func =>popStack envStack
+              | end_func =>popStack envStack
+              (* ARRAY STMS ----------------------------------------*)
+                | array_decl a myArray =>  updateEnvStack envStack ( update (update (topEnv envStack) a default) a (res_nat myArray) )
+                | array_assign a myArray => match ((topEnv envStack) a) with
+                                                | res_nat n => updateEnvStack envStack ( update (topEnv envStack) a (res_nat myArray) )
+                                                | default => updateEnvStack envStack ( update (topEnv envStack) a (res_nat myArray) )                                                 
+                                               (*update the global scope if it's nothing on the local level*)  
+                                                | _ => updateEnvStackAtIndex envStack (
+                                                                    update (globalEnv envStack) a (res_nat myArray)
+                                                            ) ((stackLength envStack 0) -1)
+                                                end
+                | array_update a index value =>  match ((topEnv envStack) a) with
+                                                | res_nat n => updateEnvStack envStack ( update (topEnv envStack) a (res_nat  ( 
+                                                                                  updateArrayAt ((topEnv envStack) a) (aeval_fun index envStack) (aeval_fun value envStack) ) 
+                                                  ) 
+                                                  )
+                                                | default => updateEnvStack envStack ( update (topEnv envStack) a (res_nat ( 
+                                                                                    updateArrayAt ((topEnv envStack) a) (aeval_fun index envStack) (aeval_fun value envStack) ) 
+                                                  )
+                                                  )                                                 
+                                                (*update the global scope if it's nothing on the local level*)                                                
+                                                | _ => updateEnvStackAtIndex envStack (
+                                                                    update (globalEnv envStack) a (res_nat (
+                                                                                     updateArrayAt ((topEnv envStack) a) (aeval_fun index envStack) (aeval_fun value envStack) ) 
+                                                )
+                                                ) ((stackLength envStack 0) -1)
+                                                end
+
                end
     end.
 
@@ -612,27 +672,25 @@ Definition resultExempleProgram := (globalEnv (eval_fun2 exmpleProgram envStackI
 (*----- exemplu variabila locala: b initializata prin parametru cu valoarea b  din scopul global, var globala b ramane neschimbat fiind distinca de in function2 ca variabila locala
   ---- rezultatul functiei este plasat in result2 
 *)
-(* 
-    Compute resultExempleProgram "result2".
-    Compute resultExempleProgram "b".
- *)
+
+(*     Compute resultExempleProgram "result2".
+    Compute resultExempleProgram "b". *)
+
 (*EXEMPLES RECURSIVE FUNCTIONS .....................................................................................................*) 
 Definition recursiveProgram :=  (
     iNat "result" ::= 0 ;;
-    iNat "initParam" ::= 0 ;;
 
-    func_declare (func "myFunction" (empty_param)) (
+    func_declare (func "myFunction" ( empty_param)) (
           ifthen ("result" <' 8) (
                   "result" :n= "result" +' 1 ;;
                  func_call "myFunction" (empty_param) end_func ;;
                  func_call "myFunction" (empty_param) end_func
              )
    ) ;;
-    func_call "myFunction" (empty_param) end_func;;
-    iNat "initParam" ::= 0
+    func_call "myFunction" (empty_param) end_func
 ).
 Definition resultRecursiveProgram := (globalEnv (eval_fun2 recursiveProgram envStackIni 1000)).
-(* Compute resultRecursiveProgram "result".*)
+Compute resultRecursiveProgram "result".
 
 (*EXEMPLES SWITCH STMT .....................................................................................................*) 
 Definition switchProgram := (
@@ -652,7 +710,17 @@ Definition switchProgram := (
 Definition switchProgramResult := (globalEnv (eval_fun2 switchProgram envStackIni 1000)).
 (* Compute switchProgramResult "x". *)
 
-Definition array3 := iArray "arw" ::= [1 ; 2; 3 ; 4].
+(*EXEMPLES ARRAY STMT .....................................................................................................*) 
+Definition arrayProgram := (
+              iNat "x" ::= 2 ;;
+              iNat "value" ::= 20 ;;
+               array_decl "arw" ([1 ; 2; 3 ; 4]) ;;
+             "x" :n= (array_index "arw" 2 ) ;;
+              array_update "arw" 2 "value"
+).
+Definition arrayProgramResult := (globalEnv (eval_fun2 arrayProgram envStackIni 1000)).
+(* Compute arrayProgramResult "arw". 
+ *)
 
 
 
